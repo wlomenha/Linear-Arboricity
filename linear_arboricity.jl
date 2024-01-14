@@ -47,15 +47,15 @@ function linear_arboricity(A::Matrix{Int}, num_forest)
     @constraint(model, [e in edges], sum(b[e,i] for i in K) == 1)
     
     #Each class has maximal degree 2
-    @constraint(model, [i in K, v in V], sum(b[((v,u)),i] for u in V if (v,u) in edges) <= 2 )
+    @constraint(model, [i in K, v in V], sum(b[((v,u)),i] for u in V if (v,u) in edges) + sum(b[((u,v)),i] for u in V if (u,v) in edges) <= 2)
         
     #no cycles 
-    
     #In each set, each edges sends a flow of 2 if it is taken
-    @constraint(model, [e in edges, i in K, v in V], x[e,i,e[1]] + x[e,i,e[2]]  <= 2*b[e,i])
+    @constraint(model, [e in edges, i in K], x[e,i,e[1]] + x[e,i,e[2]]  <= 2*b[e,i])
     
     #Vertices receive stricktly less than 2
-    @constraint(model,[k in K, v in V], sum(x[e,k,v] for e in edges) <= 2 - 2/14)
+    #@constraint(model,[k in K, v in V], sum(x[e,k,v] for e in edges) <= 2 - 2/size(A,1))
+    @constraint(model,[i in K, v in V], sum(x[e,i,e[1]] for e in edges)  + sum(x[e,i,e[2]] for e in edges) <= 2 - 2/size(A,1))
     
     optimize!(model)
 
@@ -66,9 +66,9 @@ function main(path::String, num_forest)
     A = read_adjacency_matrix(path)
     model = linear_arboricity(A,num_forest)
 
-    for e in adj_matrix_to_edges(A)
-        for k in 1:K
-            if value(model[:b][e,i]) > 0.5
+    for e in edges
+        for k in 1:num_forest
+            if value(model[:b][e,k]) > 0.5
                 println("Aresta ($(e[1]),$(e[2])) pertence a floresta ", k)
             end
         end
@@ -76,7 +76,37 @@ function main(path::String, num_forest)
 end
 
 
-path = "D:\\GitHub - Projects\\Linear Arboricity\\7_random_regular_graph.txt"
+path = "D:\\GitHub - Projects\\Linear Arboricity\\7_random_regular_graph_8_vertices.txt"
 num_forest = 4
 
 main(path,num_forest)
+
+
+
+
+A = read_adjacency_matrix(path)
+edges = adj_matrix_to_edges(A)
+m = length(edges)
+K = 1:num_forest
+V = 1:size(A,1)
+
+model = Model(Gurobi.Optimizer)
+
+# Decision variables for edges (is edge e in set k?)
+@variable(model, b[e in edges, k in K])
+    
+#Decision variables (flow sent by edge e to vertex u in set k)
+@variable(model , x[e in edges, k in K, u in V])
+
+@constraint(model, [i in K, v in V], sum(b[((v,u)),i] for u in V if (v,u) in edges) + sum(b[((u,v)),i] for u in V if (u,v) in edges) <= 2)
+println(@constraint(model, [i in K, v in V], sum(b[((v,u)),i] for u in V if (v,u) in edges) + sum(b[((u,v)),i] for u in V if (u,v) in edges) <= 2)
+)
+
+@constraint(model, [e in edges, i in K], x[e,i,e[1]] + x[e,i,e[2]]  <= 2*b[e,i])
+println(@constraint(model, [e in edges, i in K], x[e,i,e[1]] + x[e,i,e[2]]  <= 2*b[e,i]))
+
+
+@constraint(model,[i in K, v in V], sum(x[e,i,v] for e in edges) <= 2 - 2/size(A,1))
+println(@constraint(model,[i in K, v in V], sum(x[e,i,v] for e in edges) <= 2 - 2/size(A,1))
+)
+println(@constraint(model,[i in K, v in V], sum(x[e,i,e[1]] for e in edges)  + sum(x[e,i,e[2]] for e in edges) <= 2 - 2/size(A,1)))
